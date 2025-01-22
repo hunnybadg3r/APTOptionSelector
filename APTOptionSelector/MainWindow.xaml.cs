@@ -14,8 +14,8 @@ namespace APTOptionSelector
         public MainWindow()
         {
             InitializeComponent();
-            _mediator = new OptionMediator();
             InitializeOptions();
+            _mediator = new OptionMediator(_options);
             OptionsGrid.ItemsSource = _options;
             UpdateUI();
         }
@@ -31,7 +31,7 @@ namespace APTOptionSelector
                 new OptionItemViewModel { Code = "1-1", Category = "주방가구", Name = "냉장고장+키큰수납장(수납장+가전소물장)", Price = 497000, DownPayment = 24000, Interim = 99000, Balance = 374000 },
                 new OptionItemViewModel { Code = "2", Category = "주방가구", Name = "식기세척기 공간장", Price = 1744000, DownPayment = 87000, Interim = 348000, Balance = 1309000, SelectionConstraintMessage = "※ 식기세척기 제공이 아님"},
                 new OptionItemViewModel { Code = "3", Category = "주방가구", Name = "아일랜드식탁(MMA)", Price = 1744000, DownPayment = 87000, Interim = 348000, Balance = 1309000, SelectionConstraintMessage = "3 선택시 4, 5 선택 불가" },
-                new OptionItemViewModel { Code = "4", Category = "주방가구", Name = "[주방특화]엔지니어드스톤 마감(주방가구 상판, 주방벽체)+디자인형 수전+사각씽크볼+상부장 하부조명", Price = 3912000, DownPayment = 195000, Interim = 782000, Balance = 2935000 },
+                new OptionItemViewModel { Code = "4", Category = "주방가구", Name = "[주방특화]엔지니어드스톤 마감(주방가구 상판, 주방벽체)+\n디자인형 수전+사각씽크볼+상부장 하부조명", Price = 3912000, DownPayment = 195000, Interim = 782000, Balance = 2935000 },
                 new OptionItemViewModel { Code = "5", Category = "주방가구", Name = "[주방특화] 아일랜드식탁(엔지니어드스톤)", Price = 1951000, DownPayment = 97000, Interim = 390000, Balance = 1464000, SelectionConstraintMessage = "4 선택 시 선택 가능(단독선택 불가)" },
 
                 // 가구
@@ -110,13 +110,16 @@ namespace APTOptionSelector
         private readonly Dictionary<string, List<string>> _constraints;
         private readonly Dictionary<string, List<string>> _prerequisites;
         private readonly Dictionary<string, List<string>> _mutuallyExclusiveGroups;
+        private ObservableCollection<OptionItemViewModel> _options;  
 
-        public OptionMediator()
+
+        public OptionMediator(ObservableCollection<OptionItemViewModel> options)
         {
             _selectedOptions = new HashSet<string>();
             _constraints = new Dictionary<string, List<string>>();
             _prerequisites = new Dictionary<string, List<string>>();
             _mutuallyExclusiveGroups = new Dictionary<string, List<string>>();
+            _options = options;
 
             InitializeConstraints();
         }
@@ -158,21 +161,15 @@ namespace APTOptionSelector
                 {
                     foreach (var constrainedOption in _constraints[optionCode])
                     {
-                        _selectedOptions.Remove(constrainedOption);
-                    }
-                }
-
-                // 상호배타적 그룹 체크
-                foreach (var group in _mutuallyExclusiveGroups)
-                {
-                    if (group.Value.Contains(optionCode))
-                    {
-                        foreach (var option in group.Value)
+                        if (_selectedOptions.Contains(constrainedOption))
                         {
-                            if (option != optionCode)
+                            // 제약되는 옵션의 IsSelected를 false로 설정
+                            var constrainedViewModel = _options.FirstOrDefault(o => o.Code == constrainedOption);
+                            if (constrainedViewModel != null)
                             {
-                                _selectedOptions.Remove(option);
+                                constrainedViewModel.IsSelected = false;
                             }
+                            _selectedOptions.Remove(constrainedOption);
                         }
                     }
                 }
@@ -183,14 +180,25 @@ namespace APTOptionSelector
             {
                 _selectedOptions.Remove(optionCode);
             }
+
+            UpdateAllOptionsState();
         }
+
+        private void UpdateAllOptionsState()
+        {
+            foreach (var option in _options)
+            {
+                if (option.IsSelected && !CanSelectOption(option.Code))
+                {
+                    option.IsSelected = false;
+                    _selectedOptions.Remove(option.Code);
+                }
+            }
+        }
+
 
         public bool CanSelectOption(string optionCode)
         {
-            // 이미 선택된 옵션이면 true 반환
-            if (_selectedOptions.Contains(optionCode))
-                return true;
-
             // 제약조건 체크
             foreach (var selectedOption in _selectedOptions)
             {
@@ -213,7 +221,7 @@ namespace APTOptionSelector
                         break;
                     }
                 }
-                if (!hasPrerequisite) 
+                if (!hasPrerequisite)
                     return false;
             }
 
@@ -246,7 +254,7 @@ namespace APTOptionSelector
         public decimal DownPayment { get; set; }
         public decimal Interim { get; set; }
         public decimal Balance { get; set; }
-        public string SelectionConstraintMessage  { get; set; }
+        public string SelectionConstraintMessage { get; set; }
 
         public bool IsSelected
         {
